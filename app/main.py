@@ -22,8 +22,10 @@ async def health_check():
     return {"status": "ok"}
 
 
-from app.database import Base, engine
+from app.database import Base, engine, DATABASE_URL
 from .models import URL
+
+print("Connected Database URL:", DATABASE_URL)
 
 # Create the table(s) if they don’t already exist
 Base.metadata.create_all(bind=engine)
