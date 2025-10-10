@@ -40,19 +40,34 @@ def get_db():
 
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
-@app.post("/shorten", response_model=schemas.URLInfo)
+
+
+
+@app.post("/shorten")
 def create_short_url(url: schemas.URLCreate, db: Session = Depends(get_db)):
-    short_code = generate_short_code()
-    while db.query(models.URL).filter(models.URL.short_code == short_code).first():
+    # 1️⃣ Check if custom alias provided
+    if url.custom_alias:
+        # Check if alias already exists
+        existing = db.query(models.URL).filter(models.URL.short_code == url.custom_alias).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Custom alias already exists. Please choose another one.")
+        short_code = url.custom_alias
+    else:
+        # Otherwise generate a random one
         short_code = generate_short_code()
 
-    new_url = models.URL(short_code=short_code, long_url=url.long_url)
-    db.add(new_url)
+    # 2️⃣ Create and save to database
+    db_url = models.URL(short_code=short_code, long_url=url.long_url)
+    db.add(db_url)
     db.commit()
-    db.refresh(new_url)
+    db.refresh(db_url)
 
+    # 3️⃣ Build full short URL
     short_url = f"{BASE_URL}/{short_code}"
     return {"short_url": short_url, "long_url": url.long_url}
+
+
+
 
 @app.get("/{short_code}")
 def redirect_to_url(short_code: str, db: Session = Depends(get_db)):
