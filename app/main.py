@@ -45,6 +45,9 @@ BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
 @app.post("/shorten")
 def create_short_url(url: schemas.URLCreate, db: Session = Depends(get_db)):
+    if url.custom_alias and len(url.custom_alias) > 100:
+        raise HTTPException(status_code=400, detail="Alias too long (max 100 characters).")
+    
     # 1️⃣ Check if custom alias provided
     if url.custom_alias:
         # Check if alias already exists
