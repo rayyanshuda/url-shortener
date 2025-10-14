@@ -23,6 +23,9 @@ if st.button("Shorten URL"):
                     short_url = data["short_url"]
                     st.success(f"Short URL: {short_url}")
                     st.markdown(f"[Open Link]({short_url})")
+                elif res.status_code == 400:
+                    error_detail = res.json().get("detail", "Bad Request.")
+                    st.warning(f"{error_detail}")
                 else:
                     # catch validation or duplicate alias errors
                     st.error(f"Error {res.status_code}: {res.json().get('detail', res.text)}")
