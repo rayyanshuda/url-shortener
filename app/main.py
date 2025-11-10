@@ -4,10 +4,12 @@ from fastapi import FastAPI
 from fastapi import Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+
 from .database import SessionLocal
 from . import models, schemas
 from .utils import generate_short_code
-from starlette.datastructures import URL
+#from starlette.datastructures import URL
 
 load_dotenv()  # read .env file
 
@@ -22,10 +24,7 @@ async def health_check():
     return {"status": "ok"}
 
 
-from app.database import Base, engine, DATABASE_URL
-from .models import URL
-
-print("Connected Database URL:", DATABASE_URL)
+from .database import Base, engine, DATABASE_URL
 
 # Create the table(s) if they don’t already exist
 Base.metadata.create_all(bind=engine)
@@ -41,32 +40,40 @@ def get_db():
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
 
-
+MAX_TRIES = 5  # max attempts to avoid short code collision
 
 @app.post("/shorten")
 def create_short_url(url: schemas.URLCreate, db: Session = Depends(get_db)):
     if url.custom_alias and len(url.custom_alias) > 100:
         raise HTTPException(status_code=400, detail="Alias too long (max 100 characters).")
-    
-    # 1️⃣ Check if custom alias provided
+
+    # --- Custom alias path: try once, fail if taken ---
     if url.custom_alias:
-        # Check if alias already exists
-        existing = db.query(models.URL).filter(models.URL.short_code == url.custom_alias).first()
-        if existing:
+        try:
+            db_url = models.URL(short_code=url.custom_alias, long_url=url.long_url)
+            db.add(db_url)
+            db.commit()
+            db.refresh(db_url)
+        except IntegrityError:
+            db.rollback()
             raise HTTPException(status_code=400, detail="Custom alias already exists. Please choose another one.")
-        short_code = url.custom_alias
+
+    # --- Auto-generate path: retry on rare collisions ---
     else:
-        # Otherwise generate a random one
-        short_code = generate_short_code()
+        for _ in range(MAX_TRIES):
+            code = generate_short_code()
+            try:
+                db_url = models.URL(short_code=code, long_url=url.long_url)
+                db.add(db_url)
+                db.commit()
+                db.refresh(db_url)
+                break
+            except IntegrityError:
+                db.rollback()  # duplicate short_code—try again
+        else:
+            raise HTTPException(status_code=500, detail="Failed to generate a unique short code. Please try again.")
 
-    # 2️⃣ Create and save to database
-    db_url = models.URL(short_code=short_code, long_url=url.long_url)
-    db.add(db_url)
-    db.commit()
-    db.refresh(db_url)
-
-    # 3️⃣ Build full short URL
-    short_url = f"{BASE_URL}/{short_code}"
+    short_url = f"{BASE_URL}/{db_url.short_code}"
     return {"short_url": short_url, "long_url": url.long_url}
 
 
