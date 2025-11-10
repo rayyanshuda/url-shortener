@@ -11,11 +11,11 @@ DATABASE_URL = os.getenv(
     "postgresql://user:pass@db:5432/url_shortener"  # local Docker fallback
 )
 
-# If your Render URL doesn’t already include sslmode, force it
-connect_args = {}
-if "render.com" in DATABASE_URL and "sslmode=" not in DATABASE_URL:
-    connect_args = {"sslmode": "require"}
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,   # checks stale connections automatically
+    pool_recycle=300      # refreshes every 5 min (helps with Neon auto-pause)
+)
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
