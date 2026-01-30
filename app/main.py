@@ -47,8 +47,10 @@ def create_short_url(url: schemas.URLCreate, db: Session = Depends(get_db)):
     if url.custom_alias and len(url.custom_alias) > 100:
         raise HTTPException(status_code=400, detail="Alias too long (max 100 characters).")
 
+    
     # --- Custom alias path: try once, fail if taken ---
     if url.custom_alias:
+        url.custom_alias = "_".join(url.custom_alias.split()) # removes spaces in custom alias
         try:
             db_url = models.URL(short_code=url.custom_alias, long_url=url.long_url)
             db.add(db_url)
