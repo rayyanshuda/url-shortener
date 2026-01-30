@@ -3,7 +3,7 @@ from typing import Optional
 
 # Request body schema
 class URLCreate(BaseModel):
-    long_url: HttpUrl
+    long_url: str
     custom_alias: str | None = None
 
     @field_validator("long_url", mode="before")
